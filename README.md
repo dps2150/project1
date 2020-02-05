@@ -9,4 +9,3 @@ This project finds if there is a connection between the worlds of finance and ar
 
 Project <a href="doc/Project1_dps2150.Rmd">Project1_dps2150.Rmd</a> with <a href="doc/Project1_dps2150.html">markdown html</a> are found in doc folder. 
 
-*Note!* Data of lyrics (file; lyrics.RData) has not been uploaded due to size constraints from github!!! 

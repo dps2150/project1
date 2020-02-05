@@ -1,0 +1,184 @@
+---
+#title: "Project 1"
+#author: "Daniel Schmidle - dps2150"
+#date: "February 1, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+<font size="6"> Does Finance Imitate Art? </font>
+
+![](C:\Users\daniel\iCloudDrive\2020.1\STAT 4243\project1\Project1-RNotebook\figs\notes.png)
+
+The Aristotelian mimesis of art imitating life, and the counter Anti-mimesis of life imitating art, have long been up for philosophical debate. Do the artworks of the masters represent the life and times surrounding them, or do the works influence the people that view them? <br>
+Major works of art, painting, sculpture, poetry, and music depict the spectrum of human existence. Love, nature, beauty and form are all common themes in the art world and yet, one topic seams to play second fiddle to the rest. In the modern economic era, the financial health of the economy may be the most impactful in the lives of every living person on this planet (with the only exceptions being isolated mountain men, indigenous tribes, and people who locked themselves in fallout shelters for Y2K).  <br><br>
+And thus, the philosophical question that should be asked is: Does finance imitate art, or does art imitate finance?  <br><br>
+
+```{r load libraries, warning=FALSE, message=FALSE}
+library(tidytext)
+library(tidyverse)
+library(wordcloud)
+library(ggplot2)
+require(readxl)
+```
+
+
+```{r}
+# load lyrics data
+load('../output/processed_lyrics.RData') 
+```
+
+```{r}
+#remove erroneous years 
+lyrics.df <-  dt_lyrics[dt_lyrics$year>1969,]
+years <-  sort(unique(lyrics.df$year))
+
+#get sentiment data for words using tidytext
+sentiments <-  get_sentiments("afinn")
+
+```
+
+To find this out we will find the sentiment of music over time and see if there is a correlation between overall music sentiment of the times and the financial markets. <br><br>
+
+<font size="5"> First: Music Sentiment</font> <br><br>
+
+Using the data from 125704 songs from the span of 46 years, we can start to gather a representation of what topics musicians were singing about over those years. 
+For example, here is a word cloud representing the topics of all genres of music in 1999: 
+
+
+```{r warning=FALSE}
+
+test.year <-  lyrics.df[lyrics.df$year==1999,]$stemmedwords
+
+word.freq <- data_frame(text = test.year) %>% 
+  mutate(words = str_split(text, "\\s+")) %>%
+  unnest(cols=c(words)) %>% 
+  count(words) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  arrange(desc(n))
+
+
+wordcloud(words=word.freq$words,freq=word.freq$freq,min.freq=1,max.words=100,random.order=F,rot.per=0.35,colors=rainbow(8))
+
+```
+
+Then, using the AFINN Sentiment Lexicon we can score each of the words with an integer between -5 (negative sentiment) and 5 (positive sentiment).  For example, love = 3, loss = -3, and outstanding = 5. <br>
+After weighting the counts of each musical lyric per year using the sentiment scores, we start to formulate a picture of how positive or negative the overall sentiment in music of each year was. The following chart shows the most frequent words of 1999, their frequency, word value, and overall score for that year: 
+
+
+```{r}
+#assign sentiment value to words of lyrics
+word.freq$value <- 0
+
+for(word in word.freq$words){
+  if(word %in% sentiments$word){
+    word.freq[word.freq$words == word,]$value <-  sentiments[sentiments$word== word,]$value
+  }
+}
+word.freq$score <- word.freq$n * word.freq$value 
+
+
+head(word.freq[word.freq$value != 0,])
+```
+
+And the total score for 1999 was:
+
+```{r}
+total.example <- sum(word.freq$score)
+total.example
+```
+
+So, this is a chart of total Music Sentiment tracking the sentiment scores over the years: 
+
+```{r}
+score <-  rep(0,length(years))
+year.sentiment <-  data.frame(years,score)
+
+for(year in years){
+  #get lyrics of the year
+  year.lyrics <-  lyrics.df[lyrics.df$year== year,]$stemmedwords
+  
+  #limit sample for years that have more than 5000 songs
+  if(length(year.lyrics) > 5000){
+    year.lyrics <- year.lyrics[sample(1:length(year.lyrics),5000)]
+  }
+  
+  #find frequency of lyrics 
+  word.freq <- data_frame(text = year.lyrics) %>% 
+    mutate(words = str_split(text, "\\s+")) %>%
+    unnest(cols=c(words)) %>% 
+    count(words) %>% 
+    mutate(freq = n / sum(n)) %>% 
+    arrange(desc(n))
+  
+  word.freq <-merge(word.freq,sentiments,by.x="words",by.y="word" )
+  year.sentiment[year.sentiment==year,]$score <- sum(word.freq$n * word.freq$value)
+}
+
+ggplot(year.sentiment,aes(x=years,y=score,color="sentiment score"))+
+  geom_point() + geom_line()
+
+```
+
+<font size="5"> Second: Finance</font><br><br>
+
+Now that we have a sentiment score for each year of music, we can now compare those scores with the financial economy. A fair example would be to use the Dow Jones Industrial Average to obtain a financial gauge of the times.  <br>
+Here we can see the average closing price for the Dow plotted against the music sentiment score per year: 
+
+
+
+```{r}
+
+dow.data <-  read_excel("../data/dowjones.xlsx")
+dow.data <- as.data.frame(dow.data)
+
+dow <- dow.data[dow.data$Year %in% year.sentiment$years,]
+dow <- arrange(dow,dow$Year)
+
+dow.sent <- data.frame("years"=years,"sentiment"=year.sentiment$score,"dow"=dow$`Average Closing Price`)
+```
+
+
+```{r}
+
+colors <- c("Dow Year Close"="red","Music Sentiment Score"="blue")
+ggplot(data=dow.sent, aes(x = years,y= dow,color="Dow Year Close")) + 
+  geom_bar(stat = "identity", fill = "grey")+
+  geom_bar(data=dow.sent,aes(x=years,y=sentiment,color="Music Sentiment Score"),
+           stat = "identity", fill = "grey" )+
+  labs(x="Year",y="Price vs. Score",color="Legend")+
+  scale_color_manual(values=colors)+
+  theme(legend.justification=c(.1,.1), legend.position=c(.1,.1))
+```
+
+There seems to be a correlation between the growth of the Stock market and the growth of negative sentiment in music. By inspecting this chart, there seems to be leading move in the stock market trend followed by an inverse move in music sentiment. Every trending rise in the market is followed by a negative move in music sentiment and every fall in the market is followed by a rise in music sentiment. So, this show us that the situation of music imitating the financial markets is possible <br><br>
+
+Next, we can utilize a linear regression model of music sentiment on the Dow to further see the correlation. To adjust for the heteroscedasticity in the regression caused by the increasing variance, the absolute value of the log of music sentiment is regressed on the Dow price.
+
+```{r}
+ds_lm <- lm(log(abs(dow.sent$sentiment))~dow.sent$dow)
+
+plot(dow.sent$dow,log(abs(dow.sent$sentiment)),xlab="Dow Price",ylab="log of Music Sentiment",main="Linear Regression of Music Sentiment on the Dow")
+abline(ds_lm,col="red")
+```
+
+And the residual plot demonstrates that there is a decent negative correlation between the Dow Jones Industrial Average and Music sentiment over the years: 
+
+```{r}
+x <- seq()
+plot(dow.sent$dow,ds_lm$residuals,xlab="Dow Price",ylab="Residuals of Linear Model",main="Residual Plot of Linear Model")
+abline(0,0,col="red")
+```
+
+<font size="5"> Thus </font>, the answer is Yes, there is a correlation between music and art but in the classic Aristotelian mimesis way: the financial markets influence the art. <br><br>
+
+<font size="5"> Conversation: </font><br>
+
+It seems that, at least in this case, finance does influence art. Possibly the overall shared feeling of the music industry is anticapitalistic however, correlation is not causation and one has to consider, other possibilities of why the overall movement of music sentiment is negative as the markets move positive. Is it because of desensitization? Must every artist be more shockingly negative than another to gain notoriety? There are many other possibilities in the movement of in the sentiment of the arts but, one thing is for sure, the financial environment should never be left out of the conversation. <br><br>
+
+
+
+
